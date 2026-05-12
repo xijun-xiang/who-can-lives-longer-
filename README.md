@@ -82,6 +82,50 @@
 
 ---
 
+## 多平台公开评判 🌐
+
+除了单人评判，系统还支持将 Agent 产出发布到公共平台，以真实的互动指标（浏览、点赞、收藏、评论、分享）作为 Token 奖励依据。
+
+### 理念
+
+从"单人圈养"升级为"市场自然选择"。就像自然环境中生物的生存不只取决于单个捕食者，Agent 的价值也不应只由一个人类评判。公开的注意力经济是更客观的环境选择压力。
+
+### 当前支持的平台
+
+| 平台 | 模式 | 说明 |
+|------|------|------|
+| **手动代理** | 🟢 默认启用 | 为知乎/抖音等无API平台提供人工桥接。Agent产出→人类复制到平台→人类回填互动数据→系统奖励Token |
+| **Twitter/X** | 🟡 可选 | 需配置 `TWITTER_BEARER_TOKEN` 环境变量。支持自动拉取推文互动指标 |
+| **Bilibili** | 🟡 可选 | 需配置 `BILIBILI_CLIENT_ID` / `BILIBILI_CLIENT_SECRET`。通过B站开放平台API |
+
+### 使用流程 (手动代理模式)
+
+1. Agent 产出后，评判面板的"平台发布"区出现待发布内容
+2. 你复制内容，手动发布到知乎/抖音/B站等平台
+3. 在面板填入发布链接，点击"确认已发布"
+4. 定期回来看互动数据，在面板填入浏览/点赞/收藏数
+5. 系统自动计算增量Token奖励并发放
+
+### 奖励公式
+
+```
+Token = min(views × 0.01, 500) + min(likes × 2.0, 2000) + min(saves × 5.0, 3000) + min(comments × 3.0, 1500) + min(shares × 4.0, 2000)
+```
+
+可在 `config.yaml` 的 `judge.platforms.reward_formula` 中自定义。
+
+### 启用 Twitter/B站
+
+```bash
+export TWITTER_BEARER_TOKEN="your-token"
+export BILIBILI_CLIENT_ID="your-id"
+export BILIBILI_CLIENT_SECRET="your-secret"
+```
+
+然后在 `config.yaml` 中将对应平台的 `enabled` 设为 `true`。
+
+---
+
 ## 快速开始
 
 ### 环境要求

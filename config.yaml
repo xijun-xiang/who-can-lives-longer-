@@ -46,3 +46,36 @@ judge:
       reward: 50
     - type: "self_check_passed"
       reward: 100
+
+  # ── 多平台公开评判 ──
+  # Agent 产出发布到公共平台，以浏览/点赞/收藏等真实互动指标作为奖励依据
+  # 本质上是把"单人评判"升级为"市场自然选择"
+  platforms:
+    enabled: true
+    check_interval_seconds: 3600  # 每小时拉取一次互动数据
+    freshness_hours: 72           # 72小时后不再追踪旧产出
+    publish_cooldown_minutes: 30  # 同一Agent发布间隔（防刷屏）
+
+    # 互动指标 → Token 奖励公式
+    # token_reward = min(metric_value * tokens_per_unit, max_reward)
+    reward_formula:
+      views:     { tokens_per_unit: 0.01, max_reward: 500 }
+      likes:     { tokens_per_unit: 2.0,  max_reward: 2000 }
+      saves:     { tokens_per_unit: 5.0,  max_reward: 3000 }
+      comments:  { tokens_per_unit: 3.0,  max_reward: 1500 }
+      shares:    { tokens_per_unit: 4.0,  max_reward: 2000 }
+
+    # Twitter/X 平台 (使用 API v2)
+    # 密钥从环境变量读取: TWITTER_BEARER_TOKEN
+    twitter:
+      enabled: false
+
+    # Bilibili 平台 (使用开放平台API)
+    # 密钥从环境变量读取: BILIBILI_CLIENT_ID, BILIBILI_CLIENT_SECRET
+    bilibili:
+      enabled: false
+
+    # 手动代理模式 — 为无API平台(知乎/抖音)提供人工桥接
+    # Agent产出 → 人类复制到平台 → 人类回填互动数据 → 系统奖励Token
+    manual:
+      enabled: true

@@ -23,11 +23,13 @@ logger = logging.getLogger(__name__)
 class Heartbeat:
     """心跳调度器：驱动整个生态系统持续运转"""
 
-    def __init__(self, config: dict, agent_manager, judge_queue, evolution_engine):
+    def __init__(self, config: dict, agent_manager, judge_queue, evolution_engine,
+                 platform_publisher=None):
         self.config = config
         self.agent_manager = agent_manager
         self.judge_queue = judge_queue
         self.evolution = evolution_engine
+        self.platform_publisher = platform_publisher
         self.interval = config["system"]["heartbeat_interval_seconds"]
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -107,7 +109,24 @@ class Heartbeat:
             except Exception:
                 logger.exception(f"Agent {agent.agent_id} 繁殖检查异常")
 
-        # 5. 日志
+        # 5. 发布到平台
+        if self.platform_publisher and self.config.get("judge", {}).get(
+            "platforms", {}
+        ).get("enabled", False):
+            for agent in alive_agents:
+                try:
+                    self.platform_publisher.publish_pending(agent)
+                except Exception:
+                    logger.exception(f"Agent {agent.agent_id} 平台发布异常")
+
+        # 6. 收集平台指标并发放奖励
+        if self.platform_publisher:
+            try:
+                self.platform_publisher.collect_and_reward()
+            except Exception:
+                logger.exception("平台指标收集异常")
+
+        # 7. 日志
         elapsed = time.time() - tick_start
         logger.info(
             f"💓 周期 #{self.cycle_count} 完成 "

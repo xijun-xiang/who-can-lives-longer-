@@ -14,6 +14,7 @@ import logging
 import argparse
 import signal
 from pathlib import Path
+from typing import Optional
 
 from .core.heartbeat import Heartbeat
 from .core.evolution import EvolutionEngine
@@ -21,6 +22,12 @@ from .agents.agent_manager import AgentManager
 from .judge.judge_queue import JudgeQueue
 from .judge.auto_judge import AutoJudge
 from .judge.human_judge import create_app
+from .judge.reward_engine import RewardEngine
+from .judge.platform_tracker import PlatformTracker
+from .judge.platform_publisher import PlatformPublisher
+from .judge.platforms.manual_proxy import ManualProxyPlatform
+from .judge.platforms.twitter_platform import TwitterPlatform
+from .judge.platforms.bilibili_platform import BilibiliPlatform
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,8 +82,50 @@ def start_system(config_path: str, web_only: bool = False):
     # 初始化演化引擎
     evolution = EvolutionEngine(config, agent_manager)
 
+    # ── 初始化平台子系统 ──
+    platform_config = web_cfg.get("platforms", {})
+    platform_tracker: Optional[PlatformTracker] = None
+    platform_publisher: Optional[PlatformPublisher] = None
+
+    if platform_config.get("enabled", False):
+        # 持久化追踪器
+        platform_tracker = PlatformTracker(
+            data_dir=config["system"]["data_dir"],
+            freshness_hours=platform_config.get("freshness_hours", 72),
+        )
+        # 奖励引擎
+        reward_engine = RewardEngine(
+            platform_config.get("reward_formula", {})
+        )
+        # 平台编排器
+        platform_publisher = PlatformPublisher(
+            config=config,
+            platform_tracker=platform_tracker,
+            reward_engine=reward_engine,
+            agent_manager=agent_manager,
+        )
+        # 注册手动代理（默认启用）
+        if platform_config.get("manual", {}).get("enabled", True):
+            platform_publisher.register_platform(
+                ManualProxyPlatform(platform_label="manual")
+            )
+        # 注册 Twitter（需环境变量）
+        if platform_config.get("twitter", {}).get("enabled", False):
+            platform_publisher.register_platform(TwitterPlatform())
+        # 注册 Bilibili（需环境变量）
+        if platform_config.get("bilibili", {}).get("enabled", False):
+            platform_publisher.register_platform(BilibiliPlatform())
+
+        logger.info(
+            f"📡 平台子系统已启用: "
+            f"{platform_publisher.platform_names}"
+        )
+
     # 心跳
-    heartbeat = Heartbeat(config, agent_manager, judge_queue, evolution)
+    heartbeat = Heartbeat(
+        config, agent_manager, judge_queue, evolution,
+        platform_publisher=platform_publisher,
+    )
 
     if not web_only:
         heartbeat.start()
@@ -85,11 +134,17 @@ def start_system(config_path: str, web_only: bool = False):
         logger.info(f"   心跳间隔: {config['system']['heartbeat_interval_seconds']}s")
         logger.info(f"   初始 Agent: {len(agent_manager.list_alive())} 个")
         logger.info(f"   评判面板: http://{web_cfg['web_host']}:{web_cfg['web_port']}")
+        if platform_publisher:
+            logger.info(f"   平台评判: {platform_publisher.platform_names}")
         logger.info("   按 Ctrl+C 停止")
         logger.info("=" * 50)
 
     # 启动 Web UI
-    app = create_app(agent_manager, judge_queue, heartbeat, config)
+    app = create_app(
+        agent_manager, judge_queue, heartbeat, config,
+        platform_tracker=platform_tracker,
+        platform_publisher=platform_publisher,
+    )
 
     def shutdown(sig, frame):
         logger.info("正在关闭系统...")

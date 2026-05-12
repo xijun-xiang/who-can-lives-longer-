@@ -19,6 +19,27 @@ from .judge_queue import JudgeQueue
 
 logger = logging.getLogger(__name__)
 
+# ── 平台面板 CSS 追加 ──
+PLATFORM_CSS = """
+.platform-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+.platform-card .plat-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.platform-card .plat-name { font-weight: bold; color: #d2a8ff; }
+.platform-card .plat-status { font-size: 0.75em; padding: 2px 8px; border-radius: 10px; }
+.platform-card .plat-status.published { background: #1b3a2a; color: #3fb950; }
+.platform-card .plat-status.pending { background: #3a2a1b; color: #d29922; }
+.platform-card .plat-status.checked { background: #1b2a3a; color: #58a6ff; }
+.platform-card .plat-metrics { display: flex; gap: 16px; font-size: 0.8em; }
+.platform-card .plat-metrics span { color: #8b949e; }
+.platform-card .plat-metrics strong { color: #c9d1d9; }
+.platform-card .plat-actions { margin-top: 8px; }
+.platform-card .plat-actions form { display: inline-flex; gap: 6px; align-items: center; }
+.btn-publish { background: #1f6feb; color: #fff; }
+.btn-publish:hover { background: #388bfd; }
+.btn-metrics { background: #6e40c9; color: #fff; }
+.btn-metrics:hover { background: #8250df; }
+.metrics-input { background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 4px 8px; border-radius: 4px; width: 70px; font-size: 0.8em; }
+"""
+
 # ── HTML 模板 ──
 
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -60,6 +81,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         .agent-card .stat strong { color: #c9d1d9; }
         .empty-message { color: #8b949e; text-align: center; padding: 40px; font-style: italic; }
         .refresh-hint { font-size: 0.8em; color: #484f58; margin-top: 20px; text-align: center; }
+        {{ extra_css|safe }}
     </style>
 </head>
 <body>
@@ -116,6 +138,54 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <p class="empty-message">暂无待评判产出。Agent 正在工作中，等待下一个心跳周期...</p>
     {% endif %}
 
+    {% if platform_subs is not none %}
+    <h2 class="section-title">🌐 平台发布</h2>
+    {% if platform_subs %}
+        {% for sub in platform_subs %}
+        <div class="platform-card">
+            <div class="plat-header">
+                <span class="plat-name">{{ sub.platform }} · {{ sub.agent_id }}</span>
+                <span class="plat-status {{ sub.status }}">{{ sub.status }}</span>
+            </div>
+            <div class="plat-metrics">
+                <span>浏览: <strong>{{ sub.metrics.views }}</strong></span>
+                <span>赞: <strong>{{ sub.metrics.likes }}</strong></span>
+                <span>藏: <strong>{{ sub.metrics.saves }}</strong></span>
+                <span>评: <strong>{{ sub.metrics.comments }}</strong></span>
+                <span>分享: <strong>{{ sub.metrics.shares }}</strong></span>
+                <span>已奖励: <strong>{{ sub.rewards_granted }} Token</strong></span>
+            </div>
+            {% if sub.status == 'pending' %}
+            <div class="plat-actions" style="margin-top:6px;">
+                <details>
+                    <summary style="color:#8b949e;cursor:pointer;font-size:0.8em;">📋 待发布内容 (点击展开)</summary>
+                    <pre style="background:#0d1117;padding:8px;border-radius:4px;max-height:200px;overflow:auto;font-size:0.75em;margin-top:4px;">{{ sub.content_preview }}</pre>
+                </details>
+                <form method="POST" action="/manual-publish/{{ sub.submission_id }}" style="margin-top:6px;">
+                    <input type="text" name="post_url" placeholder="发布后的链接或ID" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:6px;width:280px;">
+                    <button type="submit" class="btn btn-publish">确认已发布</button>
+                </form>
+            </div>
+            {% elif sub.status == 'published' or sub.status == 'checked' %}
+            <div class="plat-actions">
+                <form method="POST" action="/manual-metrics/{{ sub.submission_id }}" style="display:flex;gap:4px;align-items:center;">
+                    <span style="font-size:0.75em;color:#8b949e;">手动更新指标:</span>
+                    <input type="number" name="views" class="metrics-input" placeholder="浏览" value="{{ sub.metrics.views }}">
+                    <input type="number" name="likes" class="metrics-input" placeholder="赞" value="{{ sub.metrics.likes }}">
+                    <input type="number" name="saves" class="metrics-input" placeholder="藏" value="{{ sub.metrics.saves }}">
+                    <input type="number" name="comments" class="metrics-input" placeholder="评" value="{{ sub.metrics.comments }}">
+                    <input type="number" name="shares" class="metrics-input" placeholder="分享" value="{{ sub.metrics.shares }}">
+                    <button type="submit" class="btn btn-metrics">更新</button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+        <p class="empty-message">暂无平台发布。Agent产出后会自动/手动发布到平台。</p>
+    {% endif %}
+    {% endif %}
+
     <h2 class="section-title">🧬 Agent 种群</h2>
     <div class="agent-list">
         {% for agent in agents %}
@@ -144,6 +214,8 @@ def create_app(
     judge_queue: JudgeQueue,
     heartbeat: Heartbeat,
     config: dict,
+    platform_tracker=None,
+    platform_publisher=None,
 ) -> Flask:
     """创建 Flask Web 应用"""
     app = Flask(__name__)
@@ -161,11 +233,20 @@ def create_app(
             key=lambda a: a.token_pool.balance,
             reverse=True,
         )
+        platform_subs = None
+        extra_css = ""
+        if platform_tracker:
+            platform_subs = [
+                s.to_dict() for s in platform_tracker.get_all_recent(limit=20)
+            ]
+            extra_css = PLATFORM_CSS
         return render_template_string(
             HTML_TEMPLATE,
             status=status,
             pending=pending,
             agents=[a.to_dict() for a in agents],
+            platform_subs=platform_subs,
+            extra_css=extra_css,
         )
 
     @app.route("/judge/<submission_id>", methods=["POST"])
@@ -177,7 +258,6 @@ def create_app(
         if not sub:
             return jsonify({"error": "提交不存在"}), 404
 
-        # 注入 Token 到 Agent
         agent = agent_manager.get_agent(sub.agent_id)
         if agent:
             agent.token_pool.reward(reward, reason=f"人类评判: {feedback}")
@@ -190,6 +270,81 @@ def create_app(
         judge_queue.skip(submission_id)
         return redirect(url_for("index"))
 
+    # ── 平台路由 ──
+
+    @app.route("/manual-publish/<submission_id>", methods=["POST"])
+    def manual_publish(submission_id):
+        """人类确认已将内容手动发布到平台，填入链接"""
+        if not platform_tracker:
+            return jsonify({"error": "平台子系统未启用"}), 400
+        post_url = request.form.get("post_url", "").strip()
+        if not post_url:
+            return jsonify({"error": "请提供发布链接"}), 400
+
+        sub = platform_tracker.get_submission(submission_id)
+        if sub:
+            sub.platform_post_id = post_url
+            sub.status = "published"
+            sub.published_at = datetime.now().isoformat()
+            platform_tracker.save_submission(sub)
+            logger.info(f"📋 手动发布确认: {submission_id} → {post_url}")
+
+        return redirect(url_for("index"))
+
+    @app.route("/manual-metrics/<submission_id>", methods=["POST"])
+    def manual_metrics(submission_id):
+        """人类手动填入平台互动指标"""
+        if not platform_tracker:
+            return jsonify({"error": "平台子系统未启用"}), 400
+
+        sub = platform_tracker.get_submission(submission_id)
+        if not sub:
+            return jsonify({"error": "提交不存在"}), 404
+
+        from .platforms.base_platform import PlatformMetrics
+        new_metrics = PlatformMetrics(
+            views=int(request.form.get("views", 0) or 0),
+            likes=int(request.form.get("likes", 0) or 0),
+            saves=int(request.form.get("saves", 0) or 0),
+            comments=int(request.form.get("comments", 0) or 0),
+            shares=int(request.form.get("shares", 0) or 0),
+        )
+
+        # 计算增量奖励
+        from .reward_engine import RewardEngine
+        reward_engine = RewardEngine(
+            config.get("judge", {}).get("platforms", {}).get(
+                "reward_formula", {}
+            )
+        )
+        reward = reward_engine.calculate_reward(
+            new_metrics, sub.previous_metrics
+        )
+
+        # 更新指标
+        sub.previous_metrics = sub.metrics
+        sub.metrics = new_metrics
+        sub.last_checked_at = datetime.now().isoformat()
+        sub.status = "checked"
+        if reward > 0:
+            sub.rewards_granted += reward
+        platform_tracker.save_submission(sub)
+
+        # 发放Token
+        if reward > 0:
+            agent = agent_manager.get_agent(sub.agent_id)
+            if agent:
+                agent.token_pool.reward(
+                    reward,
+                    reason=f"平台互动 ({sub.platform})",
+                )
+                agent_manager._save_agent(agent)
+
+        logger.info(
+            f"📊 手动更新指标: {submission_id} → +{reward} Token"
+        )
+        return redirect(url_for("index"))
+
     @app.route("/api/status")
     def api_status():
         return jsonify(heartbeat.get_status())
@@ -198,6 +353,14 @@ def create_app(
     def api_agents():
         return jsonify([
             a.to_dict() for a in agent_manager.list_all()
+        ])
+
+    @app.route("/api/platforms")
+    def api_platforms():
+        if not platform_tracker:
+            return jsonify([])
+        return jsonify([
+            s.to_dict() for s in platform_tracker.get_all_recent(limit=50)
         ])
 
     return app
