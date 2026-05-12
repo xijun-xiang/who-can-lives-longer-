@@ -1,0 +1,8 @@
+# Who Can Lives Longer - Dependencies
+# 核心依赖
+pyyaml>=6.0
+flask>=3.0
+# Claude Code CLI 需单独安装 (npm install -g @anthropic-ai/claude-code)
+
+# 可选：直接调用 DeepSeek API
+# openai>=1.0  # DeepSeek API 兼容 OpenAI SDK

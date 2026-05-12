@@ -1,0 +1,47 @@
+# ── Who Can Lives Longer ──
+# LLM Agent 生存演化生态系统
+#
+# 每个 Agent 拥有 Token 池作为"生命值"。
+# Agent 使用 Claude Code + DeepSeek 进行推理和产出，
+# 产出质量由人类评判 → 奖励 Token。
+# Token 耗尽即"死亡"，Token 充裕可"繁殖"并遗传变异技能基因。
+# 持续自主运行，仿自然选择的 Agent 演化系统。
+
+system:
+  name: "Who Can Lives Longer"
+  heartbeat_interval_seconds: 600  # 每 10 分钟一个心跳周期
+  data_dir: "./data"
+
+token_economy:
+  initial_token_budget: 10000       # 新 Agent 初始 Token 额度
+  action_cost_per_inference: 50     # 每次推理消耗的 Token
+  reproduction_threshold: 20000     # Token 超过此值可繁殖
+  reproduction_cost: 5000           # 繁殖消耗的 Token
+  offspring_initial_tokens: 8000    # 子代继承的 Token
+
+evolution:
+  mutation_rate: 0.3                # 技能基因变异概率 (0~1)
+  max_agents: 10                    # 最大存活 Agent 数量
+  min_agents: 2                     # 低于此值自动创建新 Agent
+
+agent:
+  # Agent 使用 Claude Code CLI (cc) + DeepSeek 作为推理后端
+  backend: "claude_code"            # claude_code | openai | deepseek
+  model: "deepseek-v4-pro"          # 使用的模型
+  max_output_tokens: 4096           # 单次产出最大 Token
+  work_dir: "./data/workspace"      # Agent 工作目录
+  skills_dir: "./skills"            # 技能基因库目录
+
+judge:
+  # 人类评判 Web 界面
+  web_host: "127.0.0.1"
+  web_port: 8765
+  # 自动评判规则 (可选，初期建议关闭)
+  auto_judge_enabled: false
+  auto_judge_rules:
+    - type: "code_runnable"
+      reward: 200
+    - type: "file_produced"
+      reward: 50
+    - type: "self_check_passed"
+      reward: 100
