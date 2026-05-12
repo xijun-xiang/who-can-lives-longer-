@@ -25,6 +25,7 @@ class AgentManager:
         self.agents_dir = os.path.join(config["system"]["data_dir"], "agents")
         self.work_dir = config["agent"]["work_dir"]
         self.cc_config = {
+            "cc_command": config["agent"]["cc_command"],
             "model": config["agent"]["model"],
             "max_output_tokens": config["agent"]["max_output_tokens"],
         }
@@ -123,7 +124,7 @@ class AgentManager:
             try:
                 with open(filepath, encoding="utf-8") as f:
                     data = json.load(f)
-                agent = CCAgent.from_dict(data, self.work_dir)
+                agent = CCAgent.from_dict(data, self.work_dir, self.cc_config)
                 self._agents[agent.agent_id] = agent
                 if agent.alive:
                     loaded.append(agent)

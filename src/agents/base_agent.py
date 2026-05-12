@@ -10,6 +10,7 @@ Agent 基类和 Claude Code Agent 实现
 
 import os
 import json
+import shlex
 import uuid
 import subprocess
 import tempfile
@@ -93,7 +94,7 @@ Token 充足时可以繁殖，将你的技能基因传给后代。
         }
 
     @classmethod
-    def from_dict(cls, d: dict, work_dir: str) -> "CCAgent":
+    def from_dict(cls, d: dict, work_dir: str, cc_config: dict = None) -> "CCAgent":
         pool = TokenPool.from_dict(d["token_pool"])
         skills = [SkillGene.from_dict(s) for s in d.get("skill_genes", [])]
         agent = CCAgent(
@@ -102,6 +103,7 @@ Token 充足时可以繁殖，将你的技能基因传给后代。
             skill_genes=skills,
             work_dir=work_dir,
             parent_id=d.get("parent_id"),
+            cc_config=cc_config,
         )
         agent.born_at = d.get("born_at", agent.born_at)
         agent.alive = d.get("alive", True)
@@ -112,13 +114,17 @@ Token 充足时可以繁殖，将你的技能基因传给后代。
 class CCAgent(Agent):
     """
     Claude Code Agent 实现
-    使用 Claude Code CLI (cc) + DeepSeek 作为推理后端
-    通过 subprocess 调用 cc 命令执行推理和产出
+    使用 Claude Code Router (ccr) + DeepSeek 作为推理后端
+    通过 subprocess 调用 node ccr cli.js code 执行推理和产出
     """
 
     def __init__(self, *args, cc_config: dict = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.cc_config = cc_config or {}
+        self.cc_command = self.cc_config.get(
+            "cc_command",
+            'node "D:\\cc爹的工作区\\claude-code-router\\dist\\cli.js" code',
+        )
         self.model = self.cc_config.get("model", "deepseek-v4-pro")
         self.max_output_tokens = self.cc_config.get("max_output_tokens", 4096)
 
@@ -127,28 +133,20 @@ class CCAgent(Agent):
         system_prompt = self.get_system_prompt()
         task_prompt = self._build_task_prompt()
 
-        # 写入临时文件，传给 cc
-        prompt_file = os.path.join(
-            self.work_dir, f"prompt_{self.agent_id}.txt"
-        )
+        full_prompt = f"{system_prompt}\n\n---\n\n{task_prompt}"
 
         try:
-            # 写入完整 prompt
-            full_prompt = f"{system_prompt}\n\n---\n\n{task_prompt}"
-            with open(prompt_file, "w", encoding="utf-8") as f:
-                f.write(full_prompt)
-
-            # 调用 Claude Code CLI
-            # 使用 -p 模式（非交互式）直接获取输出
+            # 调用 Claude Code Router
+            # ccr 通过 -p 模式接受 prompt 直接输出
+            cmd = shlex.split(self.cc_command) + [
+                "-p",
+                full_prompt,
+                "--model", self.model,
+                "--max-tokens", str(self.max_output_tokens),
+                "--output-format", "text",
+            ]
             result = subprocess.run(
-                [
-                    "cc",
-                    "-p",
-                    full_prompt,
-                    "--model", self.model,
-                    "--max-tokens", str(self.max_output_tokens),
-                    "--output-format", "text",
-                ],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 分钟超时
@@ -162,17 +160,10 @@ class CCAgent(Agent):
         except subprocess.TimeoutExpired:
             output = "[超时] Agent 推理超过 5 分钟限制"
         except FileNotFoundError:
-            # cc 未安装，回退到模拟模式
             output = self._fallback_act(full_prompt)
         except Exception as e:
             logger.exception(f"Agent {self.agent_id} 推理失败")
             output = f"[异常] {str(e)[:500]}"
-        finally:
-            # 清理临时文件
-            try:
-                os.remove(prompt_file)
-            except OSError:
-                pass
 
         # 记录产出
         task_record = {
