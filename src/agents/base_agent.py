@@ -149,7 +149,7 @@ class CCAgent(Agent):
                 capture_output=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=300,
+                timeout=600,
                 cwd=self.work_dir,
             )
 
@@ -246,7 +246,7 @@ class CCAgent(Agent):
                 capture_output=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=120,
+                timeout=300,
                 cwd=self.work_dir,
             )
             new_gene = result.stdout.strip()

@@ -107,7 +107,7 @@ class Heartbeat:
                 executor.submit(agent_action, agent): agent
                 for agent in alive_agents
             }
-            for future in as_completed(futures, timeout=600):
+            for future in as_completed(futures, timeout=900):
                 submitted, agent = future.result()
                 if submitted:
                     submissions_this_tick += 1
