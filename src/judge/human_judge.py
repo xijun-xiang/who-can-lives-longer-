@@ -203,8 +203,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         {% endfor %}
     </div>
 
-    <p class="refresh-hint">页面每 30 秒自动刷新 · 手动刷新: F5</p>
-    <script>setTimeout(() => location.reload(), 30000);</script>
+    <p class="refresh-hint">页面每 5 分钟自动刷新 · 手动刷新: F5</p>
+    <script>setTimeout(() => location.reload(), 300000);</script>
 </body>
 </html>"""
 
