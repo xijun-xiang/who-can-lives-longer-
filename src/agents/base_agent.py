@@ -142,7 +142,7 @@ class CCAgent(Agent):
                 "-p",
                 full_prompt,
                 "--model", self.model,
-                "--max-tokens", str(self.max_output_tokens),
+                "--max-budget-usd", "0.05",
                 "--output-format", "text",
             ]
             result = subprocess.run(

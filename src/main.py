@@ -53,14 +53,24 @@ def init_population(
         logger.info(f"已从磁盘加载 {len(existing)} 个存活 Agent，跳过初始化")
         return
 
-    # 创建初始 Agent
-    for i in range(3):
+    # 加载技能基因库，每个 Agent 分配一种专长
+    from .skills.skill_gene import load_skill_from_md
+    skills_dir = os.path.join(config["agent"]["skills_dir"], "default")
+    skill_files = {
+        "coder": os.path.join(skills_dir, "coder.skill.md"),
+        "writer": os.path.join(skills_dir, "writer.skill.md"),
+        "researcher": os.path.join(skills_dir, "researcher.skill.md"),
+    }
+
+    for i, (role, path) in enumerate(skill_files.items()):
         agent_id = f"agent_alpha_{i+1}"
+        skill = load_skill_from_md(path)
         agent_manager.create_agent(
             agent_id=agent_id,
             initial_tokens=config["token_economy"]["initial_token_budget"],
+            skill_genes=[skill],
         )
-    logger.info("初始种群已创建: 3 个 Agent")
+    logger.info("初始种群已创建: 3 个 Agent (coder + writer + researcher)")
 
 
 def start_system(config_path: str, web_only: bool = False):
