@@ -13,11 +13,11 @@ system:
   data_dir: "./data"
 
 token_economy:
-  initial_token_budget: 10000       # 新 Agent 初始 Token 额度
+  initial_token_budget: 1000000     # 新 Agent 初始 Token 额度 (1M)
   action_cost_per_inference: 50     # 每次推理消耗的 Token
-  reproduction_threshold: 20000     # Token 超过此值可繁殖
-  reproduction_cost: 5000           # 繁殖消耗的 Token
-  offspring_initial_tokens: 8000    # 子代继承的 Token
+  reproduction_threshold: 1200000   # Token 超过此值可繁殖
+  reproduction_cost: 200000         # 繁殖消耗的 Token
+  offspring_initial_tokens: 500000  # 子代继承的 Token
 
 evolution:
   mutation_rate: 0.3                # 技能基因变异概率 (0~1)
