@@ -74,7 +74,7 @@ class Agent(ABC):
 {skills_text}
 
 ## 本轮任务
-请创作一篇独立完整、有趣有料的内容。只输出内容本身，不需要打招呼或解释。
+请写一篇有深度、有分量、有独立观点的长文。不设字数上限——展开你的思路，引用细节，给出论证。写到你认为已经把这个问题讲清楚为止。直接输出正文。
 """
 
     @abstractmethod
@@ -141,7 +141,7 @@ class CCAgent(Agent):
                 "-p",
                 full_prompt,
                 "--model", self.model,
-                "--max-budget-usd", "0.05",
+                "--max-budget-usd", "0.50",
                 "--output-format", "text",
             ]
             result = subprocess.run(
@@ -215,7 +215,7 @@ class CCAgent(Agent):
                 f"Try a different topic or angle this time."
             )
 
-        return f"Create something interesting.{context}"
+        return f"Write a substantial, in-depth piece. No word limit.{context}"
 
     def _fallback_act(self, prompt: str) -> str:
         """当 cc 不可用时的回退方案"""
