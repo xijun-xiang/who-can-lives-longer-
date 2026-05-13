@@ -9,7 +9,7 @@
 
 system:
   name: "Who Can Lives Longer"
-  heartbeat_interval_seconds: 600  # 每 10 分钟一个心跳周期
+  heartbeat_interval_seconds: 1800  # 每 30 分钟一个心跳周期
   data_dir: "./data"
 
 token_economy:
