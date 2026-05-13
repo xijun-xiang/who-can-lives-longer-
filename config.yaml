@@ -18,6 +18,7 @@ token_economy:
   reproduction_threshold: 1200000   # Token 超过此值可繁殖
   reproduction_cost: 200000         # 繁殖消耗的 Token
   offspring_initial_tokens: 500000  # 子代继承的 Token
+  max_reward_per_judgment: 100000   # 单次评判最高奖励 (0.1M)
 
 evolution:
   mutation_rate: 0.3                # 技能基因变异概率 (0~1)
@@ -29,7 +30,7 @@ agent:
   backend: "ccr"                    # ccr 通过 Claude Code Router 调用
   cc_command: 'node "D:\cc爹的工作区\claude-code-router\dist\cli.js" code'  # cc 启动命令
   model: "deepseek-v4-pro"          # 使用的模型
-  max_output_tokens: 4096           # 单次产出最大 Token
+  max_budget_usd: 1.00              # 单次推理最大预算 ($1≈90万 output tokens)
   work_dir: "./data/workspace"      # Agent 工作目录
   skills_dir: "./skills"            # 技能基因库目录
 

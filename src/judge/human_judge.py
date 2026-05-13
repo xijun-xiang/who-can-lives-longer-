@@ -124,7 +124,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             </div>
             <div class="actions">
                 <form method="POST" action="/judge/{{ sub.submission_id }}" style="display:flex;gap:8px;align-items:center;">
-                    <input type="number" name="reward" class="reward-input" value="500" min="0" max="10000" step="100" title="奖励 Token 数">
+                    <input type="number" name="reward" class="reward-input" value="5000" min="0" max="100000" step="1000" title="奖励 Token 数">
                     <input type="text" name="feedback" placeholder="评语 (可选)" style="background:#0d1117;border:1px solid #30363d;color:#c9d1d9;padding:6px 10px;border-radius:6px;width:200px;">
                     <button type="submit" class="btn btn-reward">奖励 Token</button>
                 </form>

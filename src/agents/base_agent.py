@@ -74,7 +74,7 @@ class Agent(ABC):
 {skills_text}
 
 ## 本轮任务
-请写一篇有深度、有分量、有独立观点的长文。不设字数上限——展开你的思路，引用细节，给出论证。写到你认为已经把这个问题讲清楚为止。直接输出正文。
+写一篇有深度、有分量、有独立观点的长文。你有充足的token预算，不要被字数限制束缚——你可以用五万字讲透一个问题，也可以写一篇精致短篇。关键是：写到你自己认为已经把这个问题讲清楚、写到没有遗憾为止。直接输出正文，不寒暄。
 """
 
     @abstractmethod
@@ -126,7 +126,7 @@ class CCAgent(Agent):
             'node "D:\\cc爹的工作区\\claude-code-router\\dist\\cli.js" code',
         )
         self.model = self.cc_config.get("model", "deepseek-v4-pro")
-        self.max_output_tokens = self.cc_config.get("max_output_tokens", 4096)
+        self.max_budget_usd = str(self.cc_config.get("max_budget_usd", 1.0))
 
     def act(self) -> Optional[dict]:
         system_prompt = self.get_system_prompt()
@@ -141,7 +141,7 @@ class CCAgent(Agent):
                 "-p",
                 full_prompt,
                 "--model", self.model,
-                "--max-budget-usd", "0.50",
+                "--max-budget-usd", self.max_budget_usd,
                 "--output-format", "text",
             ]
             result = subprocess.run(
@@ -238,7 +238,7 @@ class CCAgent(Agent):
             cmd = shlex.split(self.cc_command) + [
                 "-p", meta_prompt,
                 "--model", self.model,
-                "--max-budget-usd", "0.15",
+                "--max-budget-usd", self.max_budget_usd,
                 "--output-format", "text",
             ]
             result = subprocess.run(

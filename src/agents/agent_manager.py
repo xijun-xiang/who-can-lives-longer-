@@ -27,7 +27,7 @@ class AgentManager:
         self.cc_config = {
             "cc_command": config["agent"]["cc_command"],
             "model": config["agent"]["model"],
-            "max_output_tokens": config["agent"]["max_output_tokens"],
+            "max_budget_usd": config["agent"].get("max_budget_usd", 1.0),
         }
         self._agents: dict[str, CCAgent] = {}
         self._ensure_dirs()
