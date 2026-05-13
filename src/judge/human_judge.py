@@ -261,13 +261,35 @@ def create_app(
         agent = agent_manager.get_agent(sub.agent_id)
         if agent:
             agent.token_pool.reward(reward, reason=f"人类评判: {feedback}")
+            # 触发技能基因自我进化
+            try:
+                agent.reflect_and_evolve(sub.output, reward, feedback)
+            except Exception:
+                pass
             agent_manager._save_agent(agent)
 
         return redirect(url_for("index"))
 
     @app.route("/skip/<submission_id>", methods=["POST"])
     def skip_submission(submission_id):
+        sub = judge_queue.get_pending()
+        sub_data = None
+        for s in sub:
+            if s.submission_id == submission_id:
+                sub_data = s
+                break
         judge_queue.skip(submission_id)
+        # 即使跳过也让Agent反思——没有被奖励本身就是信号
+        if sub_data:
+            agent = agent_manager.get_agent(sub_data.agent_id)
+            if agent:
+                try:
+                    agent.reflect_and_evolve(
+                        sub_data.output, 0, "本次产出被跳过，未获得Token奖励"
+                    )
+                    agent_manager._save_agent(agent)
+                except Exception:
+                    pass
         return redirect(url_for("index"))
 
     # ── 平台路由 ──

@@ -205,6 +205,83 @@ class CCAgent(Agent):
             "still_alive": still_alive,
         }
 
+    def reflect_and_evolve(self, output: str, reward: int, feedback: str) -> str:
+        """根据评判反馈自我反思并重写技能基因"""
+        current_skill = self._skill_genes[0].prompt if self._skill_genes else ""
+
+        meta_prompt = f"""# 技能基因自我进化
+
+你是一个正在演化的AI Agent。以下是你的产出、你获得的评分和反馈。请据此优化你的技能策略。
+
+## 当前技能基因
+{current_skill}
+
+## 本次产出（前2000字）
+{output[:2000]}
+
+## 收到的反馈
+- Token奖励: {reward} (越高越好，0=被跳过/不满意)
+- 评语: {feedback if feedback else "无评语"}
+
+## 任务
+分析你的技能基因在哪些方面做得好、哪些需要改进。
+然后**全量重写**你的技能基因（Markdown格式），新的基因应该：
+1. 保留核心定位（Thinker/Science/Storyteller 不变）
+2. 融入从反馈中学到的经验
+3. 如果反馈积极，强化做得好的策略
+4. 如果反馈冷淡或被跳过，调整方向避免无效产出
+5. 不改变 category 字段
+
+直接输出完整的新技能基因内容（从 # 标题开始），不需要额外解释。"""
+
+        try:
+            cmd = shlex.split(self.cc_command) + [
+                "-p", meta_prompt,
+                "--model", self.model,
+                "--max-budget-usd", "0.15",
+                "--output-format", "text",
+            ]
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=120,
+                cwd=self.work_dir,
+            )
+            new_gene = result.stdout.strip()
+
+            if new_gene and len(new_gene) > 100 and new_gene.startswith("#"):
+                # 更新技能基因
+                old_name = self._skill_genes[0].name
+                from ..skills.skill_gene import SkillGene
+                import uuid
+                new_skill = SkillGene(
+                    skill_id=f"skill_evolved_{uuid.uuid4().hex[:6]}",
+                    name=f"{old_name} (evolved)",
+                    description=f"第{self._skill_genes[0].generation + 1}代, 基于反馈进化",
+                    category=self._skill_genes[0].category,
+                    prompt=new_gene,
+                    version=self._skill_genes[0].version + 1,
+                    generation=self._skill_genes[0].generation + 1,
+                    parent_skill_id=self._skill_genes[0].skill_id,
+                )
+                self._skill_genes = [new_skill]
+                logger.info(
+                    f"🧬 {self.agent_id} 技能基因已进化 "
+                    f"(奖励{reward}, 新基因{len(new_gene)}字)"
+                )
+                return new_gene
+            else:
+                logger.info(
+                    f"📝 {self.agent_id} 反思完成，基因无需大改"
+                )
+                return current_skill
+
+        except Exception:
+            logger.exception(f"{self.agent_id} 技能进化失败")
+            return current_skill
+
     def _build_task_prompt(self) -> str:
         context = ""
         if self.task_history:
