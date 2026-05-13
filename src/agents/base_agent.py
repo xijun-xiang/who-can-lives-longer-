@@ -49,33 +49,22 @@ class Agent(ABC):
         return self._skill_genes
 
     def get_system_prompt(self) -> str:
-        """生成包含生存背景和技能基因的系统 prompt"""
+        """生成技能基因系统 prompt —— 淡化生存语境，聚焦内容创作"""
         skills_text = "\n\n".join(
             s.to_prompt() for s in self._skill_genes
         )
 
-        return f"""# 你是 {self.agent_id}，一个为生存而奋斗的 AI Agent
+        short_state = (
+            f"Token余额: {self.token_pool.balance:,} ｜ "
+            f"累计赚取: {self.token_pool.total_earned:,}"
+        )
 
-## 生存状态
-- 当前 Token 余额: {self.token_pool.balance}
-- 出生时间: {self.born_at}
-- 累计赚取: {self.token_pool.total_earned}
-- 累计消耗: {self.token_pool.total_spent}
+        return f"""# {self.agent_id} · {short_state}
 
-## 生存规则
-每次行动消耗 Token。Token 耗尽你将"死亡"。
-你需要产出对人类有价值的成果来换取 Token 奖励。
-Token 充足时可以繁殖，将你的技能基因传给后代。
-
-## 你的技能基因（行为策略）
 {skills_text}
 
-## 行动指令
-请基于你的技能基因，产出一个有价值的成果。
-成果形式不限：代码、文案、分析报告、创意方案等。
-关键：产出必须对人类有用，才能获得 Token 奖励。
-直接输出你的成果，无需额外解释。
-"""
+## 本轮任务
+请创作一篇独立完整、有趣有料的内容。只输出内容本身，不需要打招呼或解释。
 
     @abstractmethod
     def act(self) -> Optional[dict]:
@@ -191,21 +180,17 @@ class CCAgent(Agent):
         }
 
     def _build_task_prompt(self) -> str:
-        """构建本轮任务 prompt"""
-        # 如果有历史，加入上下文
+        """构建本轮任务 prompt —— 简短，不给方向性暗示"""
         context = ""
         if self.task_history:
             last = self.task_history[-1]
+            preview = last.get('output_preview', '')[:150]
             context = (
-                f"\n\n【上次行动历史】\n你上次的产出: "
-                f"{last.get('output_preview', '无记录')[:200]}"
+                f"\n\n【上次产出概要】{preview}\n"
+                f"本轮请尝试不同的题材或角度。"
             )
 
-        return (
-            f"现在请执行你的生存行动。记住你的 Token 余额是 "
-            f"{self.token_pool.balance}，每次行动消耗 Token。"
-            f"请产出有价值的成果来获取人类的 Token 奖励。{context}"
-        )
+        return f"开始创作吧。{context}"
 
     def _fallback_act(self, prompt: str) -> str:
         """当 cc 不可用时的回退方案"""

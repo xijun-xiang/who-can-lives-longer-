@@ -14,6 +14,7 @@
 import time
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Optional
 
@@ -79,28 +80,36 @@ class Heartbeat:
             logger.warning("⚠️ 无存活 Agent！等待种群补充...")
             return
 
-        # 3. 每个 Agent 行动
+        # 3. 每个 Agent 行动（并发执行）
         submissions_this_tick = 0
-        for agent in alive_agents:
+        cost = self.config["token_economy"]["action_cost_per_inference"]
+
+        def agent_action(agent):
+            """单个Agent的完整行动，返回(submitted, agent)"""
             try:
-                # 扣除行动消耗
-                cost = self.config["token_economy"]["action_cost_per_inference"]
                 still_alive = agent.token_pool.spend(cost, reason="心跳行动消耗")
-
                 if not still_alive:
-                    # Agent 刚刚归零
                     self._handle_death(agent)
-                    continue
+                    return (False, agent)
 
-                # Agent 决策并产出
                 result = agent.act()
-
                 if result and result.get("submitted"):
-                    submissions_this_tick += 1
                     self.judge_queue.submit(agent.agent_id, result)
-
+                    return (True, agent)
+                return (False, agent)
             except Exception:
                 logger.exception(f"Agent {agent.agent_id} 行动异常")
+                return (False, agent)
+
+        with ThreadPoolExecutor(max_workers=min(len(alive_agents), 10)) as executor:
+            futures = {
+                executor.submit(agent_action, agent): agent
+                for agent in alive_agents
+            }
+            for future in as_completed(futures, timeout=600):
+                submitted, agent = future.result()
+                if submitted:
+                    submissions_this_tick += 1
 
         # 4. 检查繁殖条件
         for agent in alive_agents:
