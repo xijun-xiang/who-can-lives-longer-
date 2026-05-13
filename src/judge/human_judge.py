@@ -120,7 +120,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                 <span class="time">{{ sub.timestamp }} · 余额: {{ sub.token_balance }} Token</span>
             </div>
             <div class="submission-body">
-                <pre>{{ sub.output[:2000] }}{% if sub.output|length > 2000 %}...(截断，共 {{ sub.output|length }} 字符){% endif %}</pre>
+                <pre>{{ sub.output[:8000] }}{% if sub.output|length > 8000 %}...(截断，共 {{ sub.output|length }} 字符){% endif %}</pre>
             </div>
             <div class="actions">
                 <form method="POST" action="/judge/{{ sub.submission_id }}" style="display:flex;gap:8px;align-items:center;">
