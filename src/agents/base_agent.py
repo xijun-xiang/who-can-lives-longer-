@@ -49,7 +49,7 @@ class Agent(ABC):
         return self._skill_genes
 
     def get_system_prompt(self) -> str:
-        """生成技能基因系统 prompt —— 淡化生存语境，聚焦内容创作"""
+        """Generate skill-based system prompt, focus on creative content"""
         skills_text = "\n\n".join(
             s.to_prompt() for s in self._skill_genes
         )
@@ -65,10 +65,11 @@ class Agent(ABC):
 
 ## 本轮任务
 请创作一篇独立完整、有趣有料的内容。只输出内容本身，不需要打招呼或解释。
+"""
 
     @abstractmethod
     def act(self) -> Optional[dict]:
-        """执行一次行动，返回产出结果"""
+        """执行一次行动, 返回产出结果"""
         ...
 
     def to_dict(self) -> dict:
@@ -137,8 +138,9 @@ class CCAgent(Agent):
             result = subprocess.run(
                 cmd,
                 capture_output=True,
-                text=True,
-                timeout=300,  # 5 分钟超时
+                encoding="utf-8",
+                errors="replace",
+                timeout=300,
                 cwd=self.work_dir,
             )
 
@@ -180,17 +182,16 @@ class CCAgent(Agent):
         }
 
     def _build_task_prompt(self) -> str:
-        """构建本轮任务 prompt —— 简短，不给方向性暗示"""
         context = ""
         if self.task_history:
             last = self.task_history[-1]
             preview = last.get('output_preview', '')[:150]
             context = (
-                f"\n\n【上次产出概要】{preview}\n"
-                f"本轮请尝试不同的题材或角度。"
+                f"\n\n[Previous output]\n{preview}\n"
+                f"Try a different topic or angle this time."
             )
 
-        return f"开始创作吧。{context}"
+        return f"Create something interesting.{context}"
 
     def _fallback_act(self, prompt: str) -> str:
         """当 cc 不可用时的回退方案"""
