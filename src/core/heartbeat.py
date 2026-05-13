@@ -82,18 +82,19 @@ class Heartbeat:
 
         # 3. 每个 Agent 行动（并发执行）
         submissions_this_tick = 0
-        cost = self.config["token_economy"]["action_cost_per_inference"]
 
         def agent_action(agent):
-            """单个Agent的完整行动，返回(submitted, agent)"""
             try:
-                still_alive = agent.token_pool.spend(cost, reason="心跳行动消耗")
-                if not still_alive:
+                result = agent.act()
+                if not result:
+                    return (False, agent)
+
+                # act() 内部已按实际 token 消耗扣费，检查是否还活着
+                if not result.get("still_alive", True):
                     self._handle_death(agent)
                     return (False, agent)
 
-                result = agent.act()
-                if result and result.get("submitted"):
+                if result.get("submitted"):
                     self.judge_queue.submit(agent.agent_id, result)
                     return (True, agent)
                 return (False, agent)

@@ -14,7 +14,7 @@ system:
 
 token_economy:
   initial_token_budget: 1000000     # 新 Agent 初始 Token 额度 (1M)
-  action_cost_per_inference: 50     # 每次推理消耗的 Token
+  # 消耗按实际 API token 数计算 (输入+输出), 由 tiktoken 精确统计
   reproduction_threshold: 1200000   # Token 超过此值可繁殖
   reproduction_cost: 200000         # 繁殖消耗的 Token
   offspring_initial_tokens: 500000  # 子代继承的 Token

@@ -19,10 +19,20 @@ from datetime import datetime
 from typing import Optional
 from abc import ABC, abstractmethod
 
+import tiktoken
+
 from ..core.token_pool import TokenPool
 from ..skills.skill_gene import SkillGene
 
 logger = logging.getLogger(__name__)
+
+# DeepSeek 使用与 OpenAI 相同的 tokenizer
+_tokenizer = tiktoken.get_encoding("cl100k_base")
+
+
+def count_tokens(text: str) -> int:
+    """计算文本的精确 token 数"""
+    return len(_tokenizer.encode(text))
 
 
 class Agent(ABC):
@@ -119,15 +129,14 @@ class CCAgent(Agent):
         self.max_output_tokens = self.cc_config.get("max_output_tokens", 4096)
 
     def act(self) -> Optional[dict]:
-        """调用 Claude Code CLI 执行一次行动"""
         system_prompt = self.get_system_prompt()
         task_prompt = self._build_task_prompt()
-
         full_prompt = f"{system_prompt}\n\n---\n\n{task_prompt}"
 
+        # 计算输入 token 实际消耗
+        input_tokens = count_tokens(full_prompt)
+
         try:
-            # 调用 Claude Code Router
-            # ccr 通过 -p 模式接受 prompt 直接输出
             cmd = shlex.split(self.cc_command) + [
                 "-p",
                 full_prompt,
@@ -156,11 +165,24 @@ class CCAgent(Agent):
             logger.exception(f"Agent {self.agent_id} 推理失败")
             output = f"[异常] {str(e)[:500]}"
 
+        # 计算输出 token 实际消耗
+        output_tokens = count_tokens(output)
+        total_cost = input_tokens + output_tokens
+
+        # 扣除真实 Token 消耗
+        still_alive = self.token_pool.spend(
+            total_cost,
+            reason=f"API调用 (输入{input_tokens} + 输出{output_tokens})",
+        )
+
         # 记录产出
         task_record = {
             "time": datetime.now().isoformat(),
             "output_preview": output[:500],
             "output_length": len(output),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_cost": total_cost,
         }
         self.task_history.append(task_record)
 
@@ -179,6 +201,8 @@ class CCAgent(Agent):
             "output_file": output_file,
             "timestamp": datetime.now().isoformat(),
             "token_balance": self.token_pool.balance,
+            "token_cost": total_cost,
+            "still_alive": still_alive,
         }
 
     def _build_task_prompt(self) -> str:
