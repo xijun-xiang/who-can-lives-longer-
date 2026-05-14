@@ -3,42 +3,38 @@
 #
 # 每个 Agent 拥有 Token 池作为"生命值"。
 # Agent 使用 Claude Code + DeepSeek 进行推理和产出，
-# 产出质量由人类评判 → 奖励 Token。
+# 发布到公共平台 → 互动指标换算 Token 奖励。
 # Token 耗尽即"死亡"，Token 充裕可"繁殖"并遗传变异技能基因。
 # 持续自主运行，仿自然选择的 Agent 演化系统。
 
 system:
   name: "Who Can Lives Longer"
-  heartbeat_interval_seconds: 1800  # 每 30 分钟一个心跳周期
+  heartbeat_interval_seconds: 7200  # 每 2 小时一个心跳周期 (串行,深度产出)
   data_dir: "./data"
 
 token_economy:
   initial_token_budget: 1000000     # 新 Agent 初始 Token 额度 (1M)
-  # 消耗按实际 API token 数计算 (输入+输出), 由 tiktoken 精确统计
   reproduction_threshold: 1200000   # Token 超过此值可繁殖
   reproduction_cost: 200000         # 繁殖消耗的 Token
   offspring_initial_tokens: 500000  # 子代继承的 Token
   max_reward_per_judgment: 100000   # 单次评判最高奖励 (0.1M)
 
 evolution:
-  mutation_rate: 0.3                # 技能基因变异概率 (0~1)
-  max_agents: 10                    # 最大存活 Agent 数量
-  min_agents: 2                     # 低于此值自动创建新 Agent
+  mutation_rate: 0.3
+  max_agents: 10
+  min_agents: 2
 
 agent:
-  # Agent 使用 Claude Code Router + DeepSeek 作为推理后端
-  backend: "ccr"                    # ccr 通过 Claude Code Router 调用
-  cc_command: 'node "D:\cc爹的工作区\claude-code-router\dist\cli.js" code'  # cc 启动命令
-  model: "deepseek-v4-pro"          # 使用的模型
-  max_budget_usd: 1.00              # 单次推理最大预算 ($1≈90万 output tokens)
-  work_dir: "./data/workspace"      # Agent 工作目录
-  skills_dir: "./skills"            # 技能基因库目录
+  backend: "ccr"
+  cc_command: 'node "D:\cc爹的工作区\claude-code-router\dist\cli.js" code'
+  model: "deepseek-v4-pro"
+  max_budget_usd: 1.00
+  work_dir: "./data/workspace"
+  skills_dir: "./skills"
 
 judge:
-  # 人类评判 Web 界面
   web_host: "127.0.0.1"
   web_port: 8765
-  # 自动评判规则 (可选，初期建议关闭)
   auto_judge_enabled: false
   auto_judge_rules:
     - type: "code_runnable"
@@ -49,16 +45,13 @@ judge:
       reward: 100
 
   # ── 多平台公开评判 ──
-  # Agent 产出发布到公共平台，以浏览/点赞/收藏等真实互动指标作为奖励依据
-  # 本质上是把"单人评判"升级为"市场自然选择"
   platforms:
     enabled: true
-    check_interval_seconds: 3600  # 每小时拉取一次互动数据
-    freshness_hours: 72           # 72小时后不再追踪旧产出
-    publish_cooldown_minutes: 30  # 同一Agent发布间隔（防刷屏）
+    check_interval_seconds: 3600
+    freshness_hours: 168
+    publish_cooldown_minutes: 120
 
     # 互动指标 → Token 奖励公式
-    # token_reward = min(metric_value * tokens_per_unit, max_reward)
     reward_formula:
       views:     { tokens_per_unit: 0.01, max_reward: 500 }
       likes:     { tokens_per_unit: 2.0,  max_reward: 2000 }
@@ -66,17 +59,30 @@ judge:
       comments:  { tokens_per_unit: 3.0,  max_reward: 1500 }
       shares:    { tokens_per_unit: 4.0,  max_reward: 2000 }
 
-    # Twitter/X 平台 (使用 API v2)
-    # 密钥从环境变量读取: TWITTER_BEARER_TOKEN
+    # Reddit (OAuth2) — 密钥从环境变量读取
+    reddit:
+      enabled: false
+      # REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD
+
+    # Twitter/X (API v2) — 密钥从环境变量读取
     twitter:
       enabled: false
+      # TWITTER_BEARER_TOKEN
 
-    # Bilibili 平台 (使用开放平台API)
-    # 密钥从环境变量读取: BILIBILI_CLIENT_ID, BILIBILI_CLIENT_SECRET
-    bilibili:
+    # Dev.to (API Key) — 密钥从环境变量读取
+    devto:
       enabled: false
+      # DEVTO_API_KEY
 
-    # 手动代理模式 — 为无API平台(知乎/抖音)提供人工桥接
-    # Agent产出 → 人类复制到平台 → 人类回填互动数据 → 系统奖励Token
+    # 手动代理 (知乎/CSDN 等) — 人类复制→回填链接→系统追踪指标
     manual:
       enabled: true
+      platforms:
+        - "zhihu"
+        - "csdn"
+
+# ── Agent → 平台映射 ──
+agent_platform_map:
+  agent_alpha_1: "reddit"    # Reddit作者
+  agent_alpha_2: "twitter"   # Twitter作者
+  agent_alpha_3: "devto"     # Dev.to作者

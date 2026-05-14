@@ -44,62 +44,53 @@ class PlatformPublisher:
         self._platforms.append(platform)
         logger.info(f"📡 平台已注册: {platform.platform_name}")
 
-    def publish_pending(self, agent) -> None:
-        """将Agent的最新产出发布到所有启用平台"""
+    def publish_pending(self, agent, platform: str = None) -> None:
+        """将Agent的最新产出发布到指定平台(或所有平台)"""
         if not agent.task_history:
             return
-
-        # 冷却检查：同一Agent在冷却期内不重复发布
-        recent = self.tracker.get_agent_submissions(agent.agent_id)
-        if recent:
-            last_pub = datetime.fromisoformat(recent[0].published_at)
-            cooldown = (
-                datetime.now() - last_pub
-            ).total_seconds() / 60
-            if cooldown < self.publish_cooldown:
-                return
 
         latest = agent.task_history[-1]
         content = latest.get("output_preview", "")
         if not content or len(content) < 50:
             return
 
-        for platform in self._platforms:
-            if not platform.is_available():
+        # 确定目标平台列表
+        targets = (
+            [p for p in self._platforms if p.platform_name == platform]
+            if platform
+            else self._platforms
+        )
+
+        for plat in targets:
+            if not plat.is_available():
                 continue
             try:
-                result = platform.publish(content)
+                result = plat.publish(content)
                 if result.success:
                     self.tracker.track_publish(
                         agent_id=agent.agent_id,
-                        platform=platform.platform_name,
+                        platform=plat.platform_name,
                         content_preview=content,
                         platform_post_id=result.platform_post_id,
                     )
                     logger.info(
-                        f"📤 {agent.agent_id} → {platform.platform_name} "
-                        f"发布成功"
+                        f"📤 {agent.agent_id} → {plat.platform_name} 发布成功"
                     )
                 elif result.needs_manual_action:
-                    # 手动代理模式：创建待人工处理的记录
                     sub = self.tracker.track_publish(
                         agent_id=agent.agent_id,
-                        platform=platform.platform_name,
+                        platform=plat.platform_name,
                         content_preview=content,
                         platform_post_id="pending_manual",
                     )
                     sub.status = "pending"
-                    # 保存内容供人类复制
                     sub.content_preview = result.content_for_manual
                     self.tracker._save(sub)
                     logger.info(
-                        f"📋 {agent.agent_id} → {platform.platform_name} "
-                        f"待人工发布"
+                        f"📋 {agent.agent_id} → {plat.platform_name} 待人工"
                     )
             except Exception:
-                logger.exception(
-                    f"发布到 {platform.platform_name} 失败"
-                )
+                logger.exception(f"发布到 {plat.platform_name} 失败")
 
     def collect_and_reward(self) -> dict[str, int]:
         """拉取所有活跃提交的指标并发放Token奖励"""

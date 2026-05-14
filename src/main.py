@@ -27,7 +27,6 @@ from .judge.platform_tracker import PlatformTracker
 from .judge.platform_publisher import PlatformPublisher
 from .judge.platforms.manual_proxy import ManualProxyPlatform
 from .judge.platforms.twitter_platform import TwitterPlatform
-from .judge.platforms.bilibili_platform import BilibiliPlatform
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,30 +46,28 @@ def init_population(
     agent_manager: AgentManager,
     config: dict,
 ) -> None:
-    """初始化初始 Agent 种群"""
+    """初始化初始 Agent 种群, 每个Agent绑定一个平台"""
     existing = agent_manager.load_all()
     if existing:
         logger.info(f"已从磁盘加载 {len(existing)} 个存活 Agent，跳过初始化")
         return
 
-    # 加载技能基因库，每个 Agent 分配一种专长
     from .skills.skill_gene import load_skill_from_md
-    skills_dir = os.path.join(config["agent"]["skills_dir"], "default")
-    skill_files = {
-        "coder": os.path.join(skills_dir, "coder.skill.md"),
-        "writer": os.path.join(skills_dir, "writer.skill.md"),
-        "researcher": os.path.join(skills_dir, "researcher.skill.md"),
-    }
+    skills_dir = os.path.join(config["agent"]["skills_dir"], "platforms")
+    agent_map = config.get("agent_platform_map", {})
 
-    for i, (role, path) in enumerate(skill_files.items()):
-        agent_id = f"agent_alpha_{i+1}"
-        skill = load_skill_from_md(path)
+    for agent_id, platform in agent_map.items():
+        skill_file = os.path.join(skills_dir, f"{platform}_author.skill.md")
+        if not os.path.exists(skill_file):
+            logger.warning(f"技能文件不存在: {skill_file}, 跳过 {agent_id}")
+            continue
+        skill = load_skill_from_md(skill_file)
         agent_manager.create_agent(
             agent_id=agent_id,
             initial_tokens=config["token_economy"]["initial_token_budget"],
             skill_genes=[skill],
         )
-    logger.info("初始种群已创建: 3 个 Agent (coder + writer + researcher)")
+    logger.info(f"初始种群已创建: {len(agent_map)} 个 Agent")
 
 
 def start_system(config_path: str, web_only: bool = False):
@@ -114,27 +111,39 @@ def start_system(config_path: str, web_only: bool = False):
             reward_engine=reward_engine,
             agent_manager=agent_manager,
         )
-        # 注册手动代理（默认启用）
-        if platform_config.get("manual", {}).get("enabled", True):
+        # 注册 Reddit (OAuth2)
+        if platform_config.get("reddit", {}).get("enabled", False):
+            from .judge.platforms.reddit_platform import RedditPlatform
             platform_publisher.register_platform(
-                ManualProxyPlatform(platform_label="manual")
+                RedditPlatform(platform_config["reddit"])
             )
-        # 注册 Twitter（需环境变量）
+        # 注册 Twitter (Bearer Token 读指标)
         if platform_config.get("twitter", {}).get("enabled", False):
             platform_publisher.register_platform(TwitterPlatform())
-        # 注册 Bilibili（需环境变量）
-        if platform_config.get("bilibili", {}).get("enabled", False):
-            platform_publisher.register_platform(BilibiliPlatform())
-
+        # 注册 Dev.to (API Key)
+        if platform_config.get("devto", {}).get("enabled", False):
+            from .judge.platforms.devto_platform import DevtoPlatform
+            platform_publisher.register_platform(
+                DevtoPlatform(platform_config["devto"])
+            )
+        # 注册手动代理 (知乎/CSDN)
+        manual_cfg = platform_config.get("manual", {})
+        if manual_cfg.get("enabled", True):
+            for label in manual_cfg.get("platforms", ["zhihu", "csdn"]):
+                platform_publisher.register_platform(
+                    ManualProxyPlatform(platform_label=label)
+                )
         logger.info(
             f"📡 平台子系统已启用: "
             f"{platform_publisher.platform_names}"
         )
 
-    # 心跳
+    # 心跳 (串行模式 + Agent平台映射)
+    agent_platform_map = config.get("agent_platform_map", {})
     heartbeat = Heartbeat(
         config, agent_manager, judge_queue, evolution,
         platform_publisher=platform_publisher,
+        agent_platform_map=agent_platform_map,
     )
 
     if not web_only:
